@@ -28,7 +28,7 @@ export abstract class BaseProvider {
 
     let rawMessage =
       (err.response && err.response.data && (err.response.data.message || err.response.data.error || JSON.stringify(err.response.data))) ||
-      err.message ||
+      (err.cause ? `${err.message} (${err.cause.message || err.cause})` : err.message) ||
       'Error contacting provider API';
 
     if (typeof rawMessage !== 'string') {

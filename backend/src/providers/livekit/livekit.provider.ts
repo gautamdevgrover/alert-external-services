@@ -12,7 +12,12 @@ export class LiveKitProvider extends BaseProvider {
   private url = config.providers.livekit.url;
 
   isConfigured(): boolean {
-    return !!(this.apiKey && this.apiSecret && this.url);
+    return !!(
+      this.apiKey &&
+      this.apiSecret &&
+      this.url &&
+      !this.url.includes('example.com')
+    );
   }
 
   getRequiredEnvVars(): string[] {
@@ -25,12 +30,15 @@ export class LiveKitProvider extends BaseProvider {
 
   async checkHealth(): Promise<HealthCheckResult> {
     if (!this.isConfigured()) {
+      const isExample = this.url && this.url.includes('example.com');
       return {
         isHealthy: false,
         responseTimeMs: 0,
         error: {
           code: 'CREDENTIALS_MISSING',
-          message: 'LiveKit API key, secret, or URL not configured',
+          message: isExample
+            ? 'LIVEKIT_URL is still set to example.com. Please set your real LiveKit URL in .env'
+            : 'LiveKit API key, secret, or URL not configured',
         },
       };
     }
@@ -59,10 +67,13 @@ export class LiveKitProvider extends BaseProvider {
 
   async getMetrics(): Promise<NormalizedMonitoringResult> {
     if (!this.isConfigured()) {
+      const isExample = this.url && this.url.includes('example.com');
       return {
         ...this.createBaseResult('down', 'usage', 0, {
           code: 'CREDENTIALS_MISSING',
-          message: 'LIVEKIT_API_KEY, LIVEKIT_API_SECRET, or LIVEKIT_URL are missing',
+          message: isExample
+            ? 'LIVEKIT_URL is still set to example.com. Please set your real LiveKit URL in .env'
+            : 'LIVEKIT_API_KEY, LIVEKIT_API_SECRET, or LIVEKIT_URL are missing',
         }),
       };
     }

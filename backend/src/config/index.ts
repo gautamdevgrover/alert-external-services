@@ -5,6 +5,17 @@ import path from 'path';
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
+// Helper to trim and remove surrounding quotes
+export function cleanEnv(val?: string): string {
+  if (!val) return '';
+  return val.trim().replace(/^["']|["']$/g, '');
+}
+
+export function cleanUrl(val?: string): string {
+  if (!val) return '';
+  return cleanEnv(val).replace(/\/+$/, '');
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -36,59 +47,59 @@ export const config = {
   // Provider credentials
   providers: {
     aws: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
-      accountId: process.env.AWS_ACCOUNT_ID || '',
-      region: process.env.AWS_REGION || 'us-east-1',
+      accessKeyId: cleanEnv(process.env.AWS_ACCESS_KEY_ID),
+      secretAccessKey: cleanEnv(process.env.AWS_SECRET_ACCESS_KEY),
+      accountId: cleanEnv(process.env.AWS_ACCOUNT_ID),
+      region: cleanEnv(process.env.AWS_REGION) || 'us-east-1',
     },
     mongodb: {
-      orgId: process.env.MONGODB_ATLAS_ORG_ID || '',
-      publicKey: process.env.MONGODB_ATLAS_PUBLIC_KEY || '',
-      privateKey: process.env.MONGODB_ATLAS_PRIVATE_KEY || '',
+      orgId: cleanEnv(process.env.MONGODB_ATLAS_ORG_ID),
+      publicKey: cleanEnv(process.env.MONGODB_ATLAS_PUBLIC_KEY),
+      privateKey: cleanEnv(process.env.MONGODB_ATLAS_PRIVATE_KEY),
     },
     redis: {
-      host: process.env.REDIS_HOST || '',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD || '',
+      host: cleanEnv(process.env.REDIS_HOST),
+      port: parseInt(cleanEnv(process.env.REDIS_PORT) || '6379', 10),
+      password: cleanEnv(process.env.REDIS_PASSWORD),
     },
     livekit: {
-      apiKey: process.env.LIVEKIT_API_KEY || '',
-      apiSecret: process.env.LIVEKIT_API_SECRET || '',
-      url: process.env.LIVEKIT_URL || 'https://livekit.example.com',
+      apiKey: cleanEnv(process.env.LIVEKIT_API_KEY),
+      apiSecret: cleanEnv(process.env.LIVEKIT_API_SECRET),
+      url: cleanUrl(process.env.LIVEKIT_URL),
     },
     elevenlabs: {
-      apiKey: process.env.ELEVENLABS_API_KEY || '',
-      apiUrl: process.env.ELEVENLABS_API_URL || 'https://api.elevenlabs.io',
-      webhookSecret: process.env.ELEVENLABS_WEBHOOK_SECRET || '',
+      apiKey: cleanEnv(process.env.ELEVENLABS_API_KEY),
+      apiUrl: cleanUrl(process.env.ELEVENLABS_API_URL) || 'https://api.elevenlabs.io',
+      webhookSecret: cleanEnv(process.env.ELEVENLABS_WEBHOOK_SECRET),
     },
     openai: {
-      apiKey: process.env.OPENAI_API_KEY || '',
-      organization: process.env.OPENAI_ORGANIZATION || '',
+      apiKey: cleanEnv(process.env.OPENAI_API_KEY),
+      organization: cleanEnv(process.env.OPENAI_ORGANIZATION),
     },
     voyage: {
-      apiKey: process.env.VOYAGEAI_API_KEY || '',
+      apiKey: cleanEnv(process.env.VOYAGEAI_API_KEY),
     },
     faceplusplus: {
-      apiKey: process.env.FACEPLUSPLUS_API_KEY || '',
-      apiSecret: process.env.FACEPLUSPLUS_API_SECRET || '',
+      apiKey: cleanEnv(process.env.FACEPLUSPLUS_API_KEY),
+      apiSecret: cleanEnv(process.env.FACEPLUSPLUS_API_SECRET),
     },
     deepgram: {
-      apiKey: process.env.DEEPGRAM_API_KEY || '',
-      secretKey: process.env.DEEPGRAM_SECRET_KEY || '',
-      projectId: process.env.DEEPGRAM_PROJECT_ID || '',
+      apiKey: cleanEnv(process.env.DEEPGRAM_API_KEY),
+      secretKey: cleanEnv(process.env.DEEPGRAM_SECRET_KEY),
+      projectId: cleanEnv(process.env.DEEPGRAM_PROJECT_ID),
     },
     apollo: {
-      apiKey: process.env.APOLLO_API_KEY || '',
+      apiKey: cleanEnv(process.env.APOLLO_API_KEY),
     },
     twilio: {
-      accountSid: process.env.TWILIO_ACCOUNT_SID || '',
-      authToken: process.env.TWILIO_AUTH_TOKEN || '',
-      apiKey: process.env.TWILIO_API_KEY || '',
-      apiSecret: process.env.TWILIO_API_SECRET || '',
+      accountSid: cleanEnv(process.env.TWILIO_ACCOUNT_SID),
+      authToken: cleanEnv(process.env.TWILIO_AUTH_TOKEN),
+      apiKey: cleanEnv(process.env.TWILIO_API_KEY),
+      apiSecret: cleanEnv(process.env.TWILIO_API_SECRET),
     },
     plivo: {
-      authId: process.env.PLIVO_AUTH_ID || '',
-      authToken: process.env.PLIVO_AUTH_TOKEN || '',
+      authId: cleanEnv(process.env.PLIVO_AUTH_ID),
+      authToken: cleanEnv(process.env.PLIVO_AUTH_TOKEN),
     },
   },
 };
