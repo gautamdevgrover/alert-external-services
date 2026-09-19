@@ -83,27 +83,51 @@ export class TwilioProvider extends BaseProvider {
 
     const start = Date.now();
     try {
-      const response = await axios.get(
-        `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Balance.json`,
-        {
-          auth: this.getAuthHeader(),
-          timeout: config.requestTimeoutMs,
+      // 1. Try Balance.json first
+      try {
+        const response = await axios.get(
+          `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}/Balance.json`,
+          {
+            auth: this.getAuthHeader(),
+            timeout: config.requestTimeoutMs,
+          }
+        );
+
+        const responseTimeMs = Date.now() - start;
+        const data = response.data;
+        const balance = data.balance !== undefined ? parseFloat(data.balance) : null;
+        const currency = data.currency || 'USD';
+
+        return {
+          ...this.createBaseResult('healthy', 'balance', responseTimeMs),
+          remaining: balance,
+          currency,
+          metadata: {
+            accountSid: data.account_sid ? `${data.account_sid.substring(0, 4)}...` : undefined,
+          },
+        };
+      } catch (balErr: any) {
+        // If 404/403 on Balance.json, fallback to Account details (standard/postpaid account)
+        if (balErr.response?.status === 404 || balErr.response?.status === 403) {
+          const accRes = await axios.get(
+            `https://api.twilio.com/2010-04-01/Accounts/${this.accountSid}.json`,
+            {
+              auth: this.getAuthHeader(),
+              timeout: config.requestTimeoutMs,
+            }
+          );
+
+          return {
+            ...this.createBaseResult('healthy', 'manual', Date.now() - start),
+            metadata: {
+              accountStatus: accRes.data?.status,
+              accountType: accRes.data?.type,
+              note: 'Active Twilio account (Postpaid / Invoiced billing - balance endpoint unavailable)',
+            },
+          };
         }
-      );
-
-      const responseTimeMs = Date.now() - start;
-      const data = response.data;
-      const balance = data.balance !== undefined ? parseFloat(data.balance) : null;
-      const currency = data.currency || 'USD';
-
-      return {
-        ...this.createBaseResult('healthy', 'balance', responseTimeMs),
-        remaining: balance,
-        currency,
-        metadata: {
-          accountSid: data.account_sid ? `${data.account_sid.substring(0, 4)}...` : undefined,
-        },
-      };
+        throw balErr;
+      }
     } catch (err: any) {
       const formattedError = this.formatError(err);
       return {

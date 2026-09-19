@@ -50,6 +50,14 @@ export const ServiceTable: React.FC<ServiceTableProps> = ({
       return <span className="text-slate-500 italic text-xs">No data yet</span>;
     }
 
+    if (r.status === 'down') {
+      return (
+        <div className="text-rose-400 text-xs font-mono max-w-xs truncate" title={r.error?.message || 'Error'}>
+          {r.error?.message ? (r.error.message.length > 35 ? r.error.message.slice(0, 35) + '...' : r.error.message) : 'Connection failed'}
+        </div>
+      );
+    }
+
     if (r.metricType === 'balance') {
       return (
         <div>

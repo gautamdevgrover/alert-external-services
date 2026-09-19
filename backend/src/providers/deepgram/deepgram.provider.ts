@@ -67,62 +67,69 @@ export class DeepgramProvider extends BaseProvider {
 
     const start = Date.now();
     try {
-      let targetProjectId = this.projectId;
+      // 1. Verify health and list projects
+      const projectsRes = await axios.get('https://api.deepgram.com/v1/projects', {
+        headers: {
+          Authorization: `Token ${this.apiKey}`,
+        },
+        timeout: config.requestTimeoutMs,
+      });
 
-      // If project ID is not explicitly set, fetch the first available project from list
-      if (!targetProjectId) {
-        const projectsRes = await axios.get('https://api.deepgram.com/v1/projects', {
-          headers: {
-            Authorization: `Token ${this.apiKey}`,
-          },
-          timeout: config.requestTimeoutMs,
-        });
-
-        const projects = projectsRes.data?.projects || [];
-        if (projects.length > 0) {
-          targetProjectId = projects[0].project_id;
-        }
-      }
+      const responseTimeMs = Date.now() - start;
+      const projects = projectsRes.data?.projects || [];
+      const targetProjectId = this.projectId || (projects.length > 0 ? projects[0].project_id : null);
 
       if (!targetProjectId) {
         return {
-          ...this.createBaseResult('healthy', 'manual', Date.now() - start),
+          ...this.createBaseResult('manual', 'manual', responseTimeMs),
           metadata: {
-            note: 'Deepgram API is reachable, but no Project ID found to query balance',
+            note: 'Deepgram API reachable, but no projects found for key',
           },
         };
       }
 
-      const balanceRes = await axios.get(
-        `https://api.deepgram.com/v1/projects/${targetProjectId}/balances`,
-        {
-          headers: {
-            Authorization: `Token ${this.apiKey}`,
-          },
-          timeout: config.requestTimeoutMs,
-        }
-      );
+      // 2. Attempt to fetch balances (prepaid accounts)
+      try {
+        const balanceRes = await axios.get(
+          `https://api.deepgram.com/v1/projects/${targetProjectId}/balances`,
+          {
+            headers: {
+              Authorization: `Token ${this.apiKey}`,
+            },
+            timeout: config.requestTimeoutMs,
+          }
+        );
 
-      const responseTimeMs = Date.now() - start;
-      const balances = balanceRes.data?.balances || [];
-      let totalBalance = 0;
-      let currency = 'USD';
+        const balances = balanceRes.data?.balances || [];
+        let totalBalance = 0;
+        let currency = 'USD';
 
-      if (balances.length > 0) {
-        for (const b of balances) {
-          totalBalance += typeof b.amount === 'number' ? b.amount : parseFloat(b.amount || 0);
-          if (b.units) currency = b.units;
+        if (balances.length > 0) {
+          for (const b of balances) {
+            totalBalance += typeof b.amount === 'number' ? b.amount : parseFloat(b.amount || 0);
+            if (b.units) currency = b.units;
+          }
+
+          return {
+            ...this.createBaseResult('healthy', 'balance', Date.now() - start),
+            remaining: totalBalance,
+            currency,
+            metadata: {
+              projectId: targetProjectId,
+              balanceCount: balances.length,
+            },
+          };
         }
+      } catch (balErr) {
+        // Balances endpoint can fail if account is pay-as-you-go credit card or invoicing
       }
 
+      // If project exists and API is healthy, but no prepaid balance
       return {
-        ...this.createBaseResult('healthy', 'balance', responseTimeMs),
-        remaining: totalBalance,
-        currency,
+        ...this.createBaseResult('healthy', 'manual', Date.now() - start),
         metadata: {
           projectId: targetProjectId,
-          balanceCount: balances.length,
-          balances,
+          note: 'Deepgram API operational (Pay-as-you-go / Invoiced account)',
         },
       };
     } catch (err: any) {

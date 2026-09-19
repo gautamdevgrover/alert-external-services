@@ -74,38 +74,45 @@ export class FacePlusPlusProvider extends BaseProvider {
     }
 
     const start = Date.now();
-    try {
-      const params = new URLSearchParams();
-      params.append('api_key', this.apiKey);
-      params.append('api_secret', this.apiSecret);
+    const endpoints = [
+      'https://api-us.faceplusplus.com/facepp/v3/faceset/getfacesets',
+      'https://api-cn.faceplusplus.com/facepp/v3/faceset/getfacesets',
+    ];
 
-      const response = await axios.post(
-        'https://api-us.faceplusplus.com/facepp/v3/faceset/getfacesets',
-        params.toString(),
-        {
+    let lastError: any = null;
+
+    for (const url of endpoints) {
+      try {
+        const params = new URLSearchParams();
+        params.append('api_key', this.apiKey);
+        params.append('api_secret', this.apiSecret);
+
+        const response = await axios.post(url, params.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
           },
           timeout: config.requestTimeoutMs,
-        }
-      );
+        });
 
-      const responseTimeMs = Date.now() - start;
+        const responseTimeMs = Date.now() - start;
 
-      // Face++ does not expose a credit balance or quota API. Return metricType: 'manual'
-      return {
-        ...this.createBaseResult('manual', 'manual', responseTimeMs),
-        metadata: {
-          note: 'Manual monitoring required',
-          apiStatus: 'Operational',
-          facesetCount: response.data?.facesets?.length ?? 0,
-        },
-      };
-    } catch (err: any) {
-      const formattedError = this.formatError(err);
-      return {
-        ...this.createBaseResult('down', 'manual', Date.now() - start, formattedError),
-      };
+        return {
+          ...this.createBaseResult('manual', 'manual', responseTimeMs),
+          metadata: {
+            note: 'Manual monitoring required',
+            region: url.includes('api-cn') ? 'China/International' : 'US',
+            apiStatus: 'Operational',
+            facesetCount: response.data?.facesets?.length ?? 0,
+          },
+        };
+      } catch (err: any) {
+        lastError = err;
+      }
     }
+
+    const formattedError = this.formatError(lastError);
+    return {
+      ...this.createBaseResult('down', 'manual', Date.now() - start, formattedError),
+    };
   }
 }

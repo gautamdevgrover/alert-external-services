@@ -19,6 +19,10 @@ describe('DeepgramProvider', () => {
 
   it('should parse balances successfully', async () => {
     mockAxios
+      .onGet('https://api.deepgram.com/v1/projects')
+      .reply(200, { projects: [{ project_id: 'project-abc-123' }] });
+
+    mockAxios
       .onGet('https://api.deepgram.com/v1/projects/project-abc-123/balances')
       .reply(200, {
         balances: [
@@ -38,7 +42,7 @@ describe('DeepgramProvider', () => {
 
   it('should handle API auth error', async () => {
     mockAxios
-      .onGet('https://api.deepgram.com/v1/projects/project-abc-123/balances')
+      .onGet('https://api.deepgram.com/v1/projects')
       .reply(401, { err_code: 'INVALID_CREDENTIALS', err_msg: 'Invalid credentials' });
 
     const result = await provider.getMetrics();

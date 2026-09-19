@@ -35,7 +35,7 @@ describe('FacePlusPlusProvider', () => {
 
   it('should return down status when API returns error', async () => {
     mockAxios
-      .onPost('https://api-us.faceplusplus.com/facepp/v3/faceset/getfacesets')
+      .onPost(new RegExp('.*faceplusplus\\.com/facepp/v3/faceset/getfacesets'))
       .reply(403, { error_message: 'AUTHENTICATION_ERROR' });
 
     const result = await provider.getMetrics();
