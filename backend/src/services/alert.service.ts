@@ -126,10 +126,10 @@ export class AlertService {
     // Update alert_state
     await query(
       `UPDATE alert_state
-       SET current_state = $1,
+       SET current_state = $1::VARCHAR,
            last_alert_type = $2,
            last_alert_at = NOW(),
-           last_state_change_at = CASE WHEN current_state != $1 THEN NOW() ELSE last_state_change_at END,
+           last_state_change_at = CASE WHEN current_state != $1::VARCHAR THEN NOW() ELSE last_state_change_at END,
            cooldown_until = $3
        WHERE service_key = $4`,
       [targetState, target.alertType, newCooldownUntil, serviceKey]
