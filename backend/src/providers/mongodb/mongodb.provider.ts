@@ -154,15 +154,38 @@ export class MongoDbAtlasProvider extends BaseProvider {
 
       let currentSpend = 0;
       let invoiceFound = false;
+      let creditsAppliedDollars: number | undefined;
+      let netBilledDollars: number | undefined;
+      let lineItemCount: number | undefined;
 
       // 2. Fetch pending invoice for current month
       try {
         const pendingRes = await this.digestRequest(
           `https://cloud.mongodb.com/api/atlas/v2/orgs/${this.orgId}/invoices/pending`
         );
-        if (pendingRes.data && pendingRes.data.amountBilledCents !== undefined) {
-          currentSpend = pendingRes.data.amountBilledCents / 100;
+        if (pendingRes.data) {
+          const d = pendingRes.data;
+          const lineItems = Array.isArray(d.lineItems) ? d.lineItems : [];
+          const lineItemSumCents = lineItems.reduce(
+            (acc: number, item: any) => acc + (item.totalPriceCents || 0),
+            0
+          );
+          const billedCents = d.amountBilledCents || 0;
+          const subtotalCents = d.subtotalCents || 0;
+          const effectiveCents =
+            billedCents > 0 ? billedCents : subtotalCents > 0 ? subtotalCents : lineItemSumCents;
+
+          currentSpend = effectiveCents / 100;
           invoiceFound = true;
+          if (d.creditsCents !== undefined) {
+            creditsAppliedDollars = Number((d.creditsCents / 100).toFixed(2));
+          }
+          if (d.amountBilledCents !== undefined) {
+            netBilledDollars = Number((d.amountBilledCents / 100).toFixed(2));
+          }
+          if (lineItems.length > 0) {
+            lineItemCount = lineItems.length;
+          }
         }
       } catch (pendingErr) {
         // Some orgs do not support /pending endpoint; fall back to invoices list
@@ -172,7 +195,13 @@ export class MongoDbAtlasProvider extends BaseProvider {
           );
           const invoices = invoicesRes.data?.results || [];
           if (invoices.length > 0) {
-            currentSpend = (invoices[0].amountBilledCents || 0) / 100;
+            const latestInv = invoices[0];
+            const cents =
+              latestInv.amountBilledCents ||
+              latestInv.subtotalCents ||
+              latestInv.creditsCents ||
+              0;
+            currentSpend = cents / 100;
             invoiceFound = true;
           }
         } catch (invErr) {
@@ -189,6 +218,9 @@ export class MongoDbAtlasProvider extends BaseProvider {
         metadata: {
           orgName: orgRes.data?.name,
           invoiceTracked: invoiceFound,
+          ...(creditsAppliedDollars !== undefined ? { creditsAppliedDollars } : {}),
+          ...(netBilledDollars !== undefined ? { netBilledDollars } : {}),
+          ...(lineItemCount !== undefined ? { lineItemCount } : {}),
         },
       };
     } catch (err: any) {

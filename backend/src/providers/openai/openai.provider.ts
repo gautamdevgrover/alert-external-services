@@ -119,14 +119,88 @@ export class OpenAIProvider extends BaseProvider {
           },
         };
       } catch (costErr: any) {
-        // If organization/costs fails (e.g. standard project key instead of admin key)
-        return {
-          ...this.createBaseResult('healthy', 'usage', responseTimeMs),
-          metadata: {
-            note: 'OpenAI API operational. Detailed spend tracking requires an Admin API key.',
-            modelCount: healthRes.data?.data?.length || 0,
-          },
-        };
+        // If organization/costs fails (e.g. standard project key instead of admin key),
+        // perform a 1-token check to verify active billing quota and extract rate limit headers
+        const modelCount = healthRes.data?.data?.length || 0;
+        try {
+          const pingRes = await axios.post(
+            'https://api.openai.com/v1/chat/completions',
+            {
+              model: 'gpt-4o-mini',
+              messages: [{ role: 'user', content: 'ping' }],
+              max_tokens: 1,
+            },
+            {
+              headers: this.getHeaders(),
+              timeout: config.requestTimeoutMs,
+            }
+          );
+
+          const h = pingRes.headers || {};
+          const remReq = h['x-ratelimit-remaining-requests']
+            ? parseInt(h['x-ratelimit-remaining-requests'], 10)
+            : null;
+          const limReq = h['x-ratelimit-limit-requests']
+            ? parseInt(h['x-ratelimit-limit-requests'], 10)
+            : null;
+          const remTok = h['x-ratelimit-remaining-tokens']
+            ? parseInt(h['x-ratelimit-remaining-tokens'], 10)
+            : null;
+          const limTok = h['x-ratelimit-limit-tokens']
+            ? parseInt(h['x-ratelimit-limit-tokens'], 10)
+            : null;
+          const orgHeader = h['openai-organization'] || this.organization || 'default';
+
+          const usedReq =
+            limReq !== null && remReq !== null ? Math.max(0, limReq - remReq) : null;
+          const percentageUsed =
+            limReq && limReq > 0 && usedReq !== null
+              ? Number(((usedReq / limReq) * 100).toFixed(2))
+              : 0;
+
+          return {
+            ...this.createBaseResult('healthy', 'usage', Date.now() - start),
+            used: usedReq ?? modelCount,
+            limit: limReq,
+            remaining: remReq,
+            percentageUsed,
+            metadata: {
+              note: 'OpenAI API operational. Detailed spend tracking requires an Admin API key.',
+              organization: orgHeader,
+              modelCount,
+              requestsRemaining: remReq,
+              requestsLimit: limReq,
+              tokensRemaining: remTok,
+              tokensLimit: limTok,
+            },
+          };
+        } catch (pingErr: any) {
+          const errCode = pingErr.response?.data?.error?.code;
+          const errMsg = pingErr.response?.data?.error?.message;
+          if (errCode === 'insufficient_quota' || pingErr.response?.status === 429) {
+            return {
+              ...this.createBaseResult('critical', 'balance', Date.now() - start, {
+                code: errCode || 'INSUFFICIENT_QUOTA',
+                message: errMsg || 'OpenAI credit balance / quota exhausted',
+              }),
+              remaining: 0,
+              thresholdStatus: 'critical',
+              metadata: {
+                modelCount,
+                note: 'OpenAI account has exceeded its billing quota ($0.00 remaining)',
+              },
+            };
+          }
+
+          return {
+            ...this.createBaseResult('healthy', 'usage', responseTimeMs),
+            used: modelCount,
+            metadata: {
+              note: 'OpenAI API operational. Detailed spend tracking requires an Admin API key.',
+              modelCount,
+            },
+          };
+        }
       }
     } catch (err: any) {
       const formattedError = this.formatError(err);

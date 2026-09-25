@@ -106,7 +106,29 @@ export class FacePlusPlusProvider extends BaseProvider {
           },
         };
       } catch (err: any) {
-        lastError = err;
+        const errMsg = String(
+          err.response?.data?.error_message || err.message || ''
+        );
+        // If this region recognized the key and reported Insufficient Account Balance, do not overwrite with another region's AUTHENTICATION_ERROR
+        if (errMsg.toLowerCase().includes('insufficient') || errMsg.includes('INSUFFICIENT_BALANCE')) {
+          return {
+            ...this.createBaseResult('critical', 'balance', Date.now() - start, {
+              code: 'INSUFFICIENT_BALANCE',
+              message: errMsg,
+            }),
+            remaining: 0,
+            currency: 'USD',
+            thresholdStatus: 'critical',
+            metadata: {
+              region: url.includes('api-cn') ? 'China/International' : 'US',
+              accountStatus: 'Insufficient Account Balance',
+              note: 'Credentials verified, but Face++ account balance is $0.00 (top-up required)',
+            },
+          };
+        }
+        if (!lastError) {
+          lastError = err;
+        }
       }
     }
 

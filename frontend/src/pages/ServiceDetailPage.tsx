@@ -98,13 +98,58 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ serviceKey
   const { service, latestResult, thresholdConfig, recentAlerts } = detail;
   const status = latestResult?.status || (service.isConfigured ? 'healthy' : 'down');
 
-  // Prepare chart data from snapshots and recent checks
-  const chartData = (history?.dailySnapshots || []).map((s) => ({
-    date: s.date.slice(5), // MM-DD
-    usage: s.usage ?? (s.percentageUsed ?? 0),
-    remaining: s.remaining ?? 0,
-    cost: s.cost ?? 0,
-  }));
+  // Prepare chart data from daily snapshots, falling back to recent checks if daily snapshots haven't accumulated yet
+  const hasSnapshots = (history?.dailySnapshots || []).length > 0;
+  const chartData = hasSnapshots
+    ? (history?.dailySnapshots || []).map((s) => ({
+        date: String(s.date).slice(5, 10),
+        usage: Number(s.usage ?? s.remaining ?? s.percentageUsed ?? 0),
+        remaining: Number(s.remaining ?? 0),
+        cost: Number(s.cost ?? 0),
+      }))
+    : (history?.recentChecks || []).map((c) => {
+        const dt = new Date(c.checkedAt);
+        const label = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+        return {
+          date: label,
+          usage: Number(c.remaining ?? c.used ?? c.percentageUsed ?? c.currentSpend ?? 0),
+          remaining: Number(c.remaining ?? 0),
+          cost: Number(c.currentSpend ?? 0),
+        };
+      });
+
+  const remVal =
+    latestResult?.remaining !== null && latestResult?.remaining !== undefined
+      ? Number(latestResult.remaining)
+      : null;
+  const spendVal =
+    latestResult?.current_spend !== null && latestResult?.current_spend !== undefined
+      ? Number(latestResult.current_spend)
+      : null;
+  const pctVal =
+    latestResult?.percentage_used !== null && latestResult?.percentage_used !== undefined
+      ? Number(latestResult.percentage_used)
+      : null;
+  const usedVal =
+    latestResult?.used !== null && latestResult?.used !== undefined
+      ? Number(latestResult.used)
+      : null;
+  const limitVal =
+    latestResult?.limit_val !== null && latestResult?.limit_val !== undefined
+      ? Number(latestResult.limit_val)
+      : null;
+
+  const warnThreshold =
+    thresholdConfig?.warningThreshold ?? (thresholdConfig as any)?.warning_threshold;
+  const critThreshold =
+    thresholdConfig?.criticalThreshold ?? (thresholdConfig as any)?.critical_threshold;
+  const cooldownMins =
+    thresholdConfig?.alertCooldownMinutes ?? (thresholdConfig as any)?.alert_cooldown_minutes ?? 360;
+
+  const rawMeta = (latestResult?.raw_metadata || {}) as Record<string, any>;
+  const metaEntries = Object.entries(rawMeta).filter(
+    ([, v]) => v !== null && v !== undefined && typeof v !== 'object'
+  );
 
   return (
     <div className="space-y-6 pb-12">
@@ -150,18 +195,32 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ serviceKey
             Current Metric ({latestResult?.metric_type || 'standard'})
           </span>
           <div className="mt-2 text-2xl font-bold font-mono text-white">
-            {latestResult?.remaining !== null && latestResult?.remaining !== undefined
-              ? latestResult?.currency === 'USD'
-                ? `$${latestResult.remaining.toFixed(2)}`
-                : `${latestResult.remaining.toLocaleString()} credits`
-              : latestResult?.current_spend !== null && latestResult?.current_spend !== undefined
-              ? `$${latestResult.current_spend.toFixed(2)} spend`
-              : latestResult?.percentage_used !== null && latestResult?.percentage_used !== undefined
-              ? `${latestResult.percentage_used}% utilized`
+            {remVal !== null
+              ? latestResult?.metric_type === 'balance'
+                ? `$${remVal.toFixed(2)}`
+                : `${remVal.toLocaleString()} left`
+              : spendVal !== null
+              ? `$${spendVal.toFixed(2)} spend`
+              : rawMeta.usedMemoryHuman
+              ? `${rawMeta.usedMemoryHuman} RAM`
+              : service.key === 'livekit' && usedVal !== null
+              ? `${usedVal} active rooms`
+              : pctVal !== null
+              ? `${pctVal}% utilized`
+              : usedVal !== null
+              ? `${usedVal.toLocaleString()} units`
+              : rawMeta.apiStatus === 'Operational'
+              ? 'Operational'
               : 'Manual Monitoring'}
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
-            {latestResult?.limit_val ? `Total limit: ${latestResult.limit_val.toLocaleString()}` : 'Live quota metric'}
+            {limitVal !== null
+              ? `Total limit: ${limitVal.toLocaleString()}`
+              : latestResult?.budget
+              ? `Monthly budget: $${Number(latestResult.budget).toFixed(0)}`
+              : rawMeta.creditsAppliedDollars !== undefined
+              ? `Credits applied: $${Number(rawMeta.creditsAppliedDollars).toFixed(2)}`
+              : 'Live telemetry metric'}
           </span>
         </div>
 
@@ -173,15 +232,15 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ serviceKey
           <div className="mt-2 text-sm text-slate-200 space-y-1 font-mono">
             <div className="flex justify-between">
               <span className="text-amber-400">Warning:</span>
-              <span>{thresholdConfig?.warningThreshold} {thresholdConfig?.unit}</span>
+              <span>{warnThreshold} {thresholdConfig?.unit}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-rose-400">Critical:</span>
-              <span>{thresholdConfig?.criticalThreshold} {thresholdConfig?.unit}</span>
+              <span>{critThreshold} {thresholdConfig?.unit}</span>
             </div>
           </div>
           <span className="text-[11px] text-slate-500 mt-1 block">
-            Cooldown: {thresholdConfig?.alertCooldownMinutes || 360} mins
+            Cooldown: {cooldownMins} mins
           </span>
         </div>
 
@@ -220,6 +279,27 @@ export const ServiceDetailPage: React.FC<ServiceDetailPageProps> = ({ serviceKey
           </span>
         </div>
       </div>
+
+      {/* Live Provider Telemetry & Metadata */}
+      {metaEntries.length > 0 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+            Live Provider Telemetry & Details
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {metaEntries.map(([k, v]) => (
+              <div key={k} className="bg-slate-950/60 border border-slate-800/80 rounded-lg px-3.5 py-2.5">
+                <div className="text-[11px] text-slate-400 font-medium capitalize">
+                  {k.replace(/([A-Z])/g, ' $1').trim()}
+                </div>
+                <div className="text-xs font-mono font-semibold text-slate-200 mt-0.5 truncate" title={String(v)}>
+                  {typeof v === 'number' ? v.toLocaleString() : String(v)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Safe Error Details (if present) */}
       {latestResult?.error_message && (

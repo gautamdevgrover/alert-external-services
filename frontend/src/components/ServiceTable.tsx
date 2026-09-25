@@ -53,32 +53,40 @@ export const ServiceTable: React.FC<ServiceTableProps> = ({
     if (r.status === 'down') {
       return (
         <div className="text-rose-400 text-xs font-mono max-w-xs truncate" title={r.error?.message || 'Error'}>
-          {r.error?.message ? (r.error.message.length > 35 ? r.error.message.slice(0, 35) + '...' : r.error.message) : 'Connection failed'}
+          {r.error?.message ? (r.error.message.length > 40 ? r.error.message.slice(0, 40) + '...' : r.error.message) : 'Connection failed'}
         </div>
       );
     }
 
     if (r.metricType === 'balance') {
+      const val = r.remaining !== null && r.remaining !== undefined ? Number(r.remaining) : 0;
       return (
         <div>
-          <span className="font-mono text-sm font-semibold text-emerald-400">
-            ${r.remaining !== null && r.remaining !== undefined ? r.remaining.toFixed(2) : '0.00'}
+          <span className={`font-mono text-sm font-semibold ${val <= 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+            ${val.toFixed(2)}
           </span>
           <span className="text-xs text-slate-400 ml-1">balance</span>
+          {r.error?.message && (
+            <div className="text-[11px] text-rose-400 font-mono truncate max-w-[200px]" title={r.error.message}>
+              {r.error.message}
+            </div>
+          )}
         </div>
       );
     }
 
     if (r.metricType === 'credits') {
+      const rem = r.remaining !== null && r.remaining !== undefined ? Number(r.remaining) : null;
+      const lim = r.limit !== null && r.limit !== undefined ? Number(r.limit) : null;
       return (
         <div>
           <span className="font-mono text-sm font-semibold text-sky-400">
-            {r.remaining !== null && r.remaining !== undefined ? r.remaining.toLocaleString() : 'N/A'}
+            {rem !== null ? rem.toLocaleString() : 'N/A'}
           </span>
           <span className="text-xs text-slate-400 ml-1">remaining</span>
-          {r.limit && (
+          {lim !== null && (
             <div className="text-[11px] text-slate-500 font-mono">
-              of {r.limit.toLocaleString()}
+              of {lim.toLocaleString()} {r.metadata?.type === 'daily_api_quota' ? 'daily reqs' : 'quota'}
             </div>
           )}
         </div>
@@ -86,22 +94,98 @@ export const ServiceTable: React.FC<ServiceTableProps> = ({
     }
 
     if (r.metricType === 'spend') {
+      const spend = r.currentSpend !== null && r.currentSpend !== undefined ? Number(r.currentSpend) : 0;
+      const budget = r.budget !== null && r.budget !== undefined ? Number(r.budget) : null;
       return (
         <div>
           <span className="font-mono text-sm font-semibold text-amber-300">
-            ${r.currentSpend !== null && r.currentSpend !== undefined ? r.currentSpend.toFixed(2) : '0.00'}
+            ${spend.toFixed(2)}
           </span>
           <span className="text-xs text-slate-400 ml-1">spend</span>
-          {r.budget && (
+          {budget !== null ? (
             <div className="text-[11px] text-slate-500 font-mono">
-              budget ${r.budget.toFixed(0)}
+              budget ${budget.toFixed(0)} ({r.percentageUsed ?? 0}%)
             </div>
-          )}
+          ) : r.metadata?.creditsAppliedDollars !== undefined ? (
+            <div className="text-[11px] text-slate-500 font-mono">
+              credits applied: ${Number(r.metadata.creditsAppliedDollars).toFixed(2)}
+            </div>
+          ) : r.metadata?.orgName ? (
+            <div className="text-[11px] text-slate-500 font-mono truncate max-w-[180px]">
+              {r.metadata.orgName}
+            </div>
+          ) : null}
         </div>
       );
     }
 
     if (r.metricType === 'usage') {
+      if (s.key === 'redis') {
+        const usedMb = r.used !== null && r.used !== undefined ? Number(r.used) : 0;
+        const clients = r.metadata?.connectedClients;
+        const keys = r.metadata?.totalKeys;
+        return (
+          <div>
+            <span className="font-mono text-sm font-semibold text-indigo-400">
+              {r.metadata?.usedMemoryHuman || `${usedMb} MB`}
+            </span>
+            <span className="text-xs text-slate-400 ml-1">RAM used</span>
+            {(clients !== undefined || keys !== undefined) && (
+              <div className="text-[11px] text-slate-500 font-mono">
+                {clients !== undefined ? `${clients} clients` : ''}
+                {clients !== undefined && keys !== undefined ? ' • ' : ''}
+                {keys !== undefined ? `${keys} keys` : ''}
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      if (s.key === 'livekit') {
+        const rooms = r.metadata?.activeRooms ?? r.used ?? 0;
+        const participants = r.metadata?.activeParticipants ?? 0;
+        return (
+          <div>
+            <span className="font-mono text-sm font-semibold text-indigo-400">
+              {rooms} active {rooms === 1 ? 'room' : 'rooms'}
+            </span>
+            <div className="text-[11px] text-slate-500 font-mono">
+              {participants} {participants === 1 ? 'participant' : 'participants'} • Cloud Connected
+            </div>
+          </div>
+        );
+      }
+
+      if (s.key === 'openai') {
+        const remReq = r.remaining ?? r.metadata?.requestsRemaining;
+        const limReq = r.limit ?? r.metadata?.requestsLimit;
+        const models = r.metadata?.modelCount;
+        if (remReq !== null && remReq !== undefined && limReq) {
+          return (
+            <div>
+              <span className="font-mono text-sm font-semibold text-indigo-400">
+                {Number(remReq).toLocaleString()}
+              </span>
+              <span className="text-xs text-slate-400 ml-1">reqs left</span>
+              <div className="text-[11px] text-slate-500 font-mono">
+                of {Number(limReq).toLocaleString()} RPM{models ? ` • ${models} models` : ''}
+              </div>
+            </div>
+          );
+        }
+        if (models) {
+          return (
+            <div>
+              <span className="font-mono text-sm font-semibold text-indigo-400">
+                {models} models
+              </span>
+              <span className="text-xs text-slate-400 ml-1">accessible</span>
+              <div className="text-[11px] text-slate-500 font-mono">API Operational</div>
+            </div>
+          );
+        }
+      }
+
       return (
         <div>
           <span className="font-mono text-sm font-semibold text-indigo-400">
@@ -110,6 +194,19 @@ export const ServiceTable: React.FC<ServiceTableProps> = ({
               : `${r.used ?? 0} units`}
           </span>
           <span className="text-xs text-slate-400 ml-1">utilized</span>
+        </div>
+      );
+    }
+
+    if (r.metadata?.apiStatus === 'Operational') {
+      return (
+        <div>
+          <span className="font-mono text-xs font-semibold text-emerald-400">
+            API Operational
+          </span>
+          <div className="text-[11px] text-slate-500 font-mono">
+            {r.metadata?.model ? `Model: ${r.metadata.model}` : 'Quota verified via live ping'}
+          </div>
         </div>
       );
     }

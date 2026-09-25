@@ -11,7 +11,11 @@ export class DeepgramProvider extends BaseProvider {
   private projectId = config.providers.deepgram.projectId;
 
   isConfigured(): boolean {
-    return !!this.apiKey;
+    return !!(
+      this.apiKey &&
+      !this.apiKey.startsWith('your_') &&
+      !this.apiKey.includes('example')
+    );
   }
 
   getRequiredEnvVars(): string[] {

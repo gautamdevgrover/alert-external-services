@@ -33,29 +33,32 @@ router.get('/:service', async (req: Request, res: Response) => {
       [serviceKey]
     );
 
+    const parseNum = (val: any) =>
+      val !== null && val !== undefined && val !== '' ? parseFloat(val) : null;
+
     res.json({
       serviceKey,
       dailySnapshots: snapshotsRes.rows.map((r) => ({
         date: r.snapshot_date,
         status: r.status,
         metricType: r.metric_type,
-        usage: r.usage_val ? parseFloat(r.usage_val) : null,
-        remaining: r.remaining_val ? parseFloat(r.remaining_val) : null,
-        cost: r.cost_val ? parseFloat(r.cost_val) : null,
-        percentageUsed: r.percentage_used ? parseFloat(r.percentage_used) : null,
+        usage: parseNum(r.usage_val),
+        remaining: parseNum(r.remaining_val),
+        cost: parseNum(r.cost_val),
+        percentageUsed: parseNum(r.percentage_used),
         thresholdStatus: r.threshold_status,
       })),
       recentChecks: recentChecksRes.rows.reverse().map((r) => ({
         checkedAt: r.checked_at,
         status: r.status,
         metricType: r.metric_type,
-        used: r.used ? parseFloat(r.used) : null,
-        limit: r.limit_val ? parseFloat(r.limit_val) : null,
-        remaining: r.remaining ? parseFloat(r.remaining) : null,
-        currentSpend: r.current_spend ? parseFloat(r.current_spend) : null,
-        forecastedSpend: r.forecasted_spend ? parseFloat(r.forecasted_spend) : null,
-        budget: r.budget ? parseFloat(r.budget) : null,
-        percentageUsed: r.percentage_used ? parseFloat(r.percentage_used) : null,
+        used: parseNum(r.used),
+        limit: parseNum(r.limit_val),
+        remaining: parseNum(r.remaining),
+        currentSpend: parseNum(r.current_spend),
+        forecastedSpend: parseNum(r.forecasted_spend),
+        budget: parseNum(r.budget),
+        percentageUsed: parseNum(r.percentage_used),
         responseTimeMs: r.response_time_ms,
       })),
     });

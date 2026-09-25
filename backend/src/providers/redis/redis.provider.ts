@@ -97,14 +97,25 @@ export class RedisProvider extends BaseProvider {
 
     try {
       await client.connect();
-      const pong = await client.ping();
+      await client.ping();
       const memoryInfoRaw = await client.info('memory');
       const serverInfoRaw = await client.info('server');
+      let clientsInfoRaw = '';
+      let dbKeys: number | undefined;
+      try {
+        clientsInfoRaw = await client.info('clients');
+      } catch (_) {}
+      try {
+        if (typeof (client as any).dbsize === 'function') {
+          dbKeys = await client.dbsize();
+        }
+      } catch (_) {}
       await client.quit();
 
       const responseTimeMs = Date.now() - start;
       const mem = this.parseInfo(memoryInfoRaw);
       const srv = this.parseInfo(serverInfoRaw);
+      const cli = this.parseInfo(clientsInfoRaw);
 
       const usedBytes = parseInt(mem.used_memory || '0', 10);
       const maxBytes = parseInt(mem.maxmemory || '0', 10);
@@ -116,6 +127,9 @@ export class RedisProvider extends BaseProvider {
         percentageUsed = Number(((usedBytes / maxBytes) * 100).toFixed(2));
       }
 
+      const connectedClients = cli.connected_clients || mem.connected_clients;
+      const maxClients = cli.maxclients;
+
       return {
         ...this.createBaseResult('healthy', 'usage', responseTimeMs),
         used: usedMb,
@@ -123,9 +137,12 @@ export class RedisProvider extends BaseProvider {
         remaining: maxMb && maxMb > usedMb ? Number((maxMb - usedMb).toFixed(2)) : null,
         percentageUsed,
         metadata: {
-          usedMemoryHuman: mem.used_memory_human,
+          usedMemoryHuman: mem.used_memory_human || `${usedMb}M`,
+          usedMemoryPeakHuman: mem.used_memory_peak_human,
           redisVersion: srv.redis_version,
-          connectedClients: mem.connected_clients,
+          connectedClients: connectedClients ? parseInt(connectedClients, 10) : undefined,
+          maxClients: maxClients ? parseInt(maxClients, 10) : undefined,
+          totalKeys: dbKeys,
           host: this.host,
           port: this.port,
         },

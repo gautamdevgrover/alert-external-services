@@ -42,6 +42,9 @@ router.get('/', async (req: Request, res: Response) => {
       const latest = latestMap.get(s.key);
       const cred = credsMap.get(s.key);
 
+      const parseNum = (val: any) =>
+        val !== null && val !== undefined && val !== '' ? parseFloat(val) : null;
+
       return {
         key: s.key,
         name: s.name,
@@ -56,13 +59,13 @@ router.get('/', async (req: Request, res: Response) => {
           ? {
               status: latest.status,
               metricType: latest.metric_type,
-              currentSpend: latest.current_spend ? parseFloat(latest.current_spend) : null,
-              forecastedSpend: latest.forecasted_spend ? parseFloat(latest.forecasted_spend) : null,
-              budget: latest.budget ? parseFloat(latest.budget) : null,
-              used: latest.used ? parseFloat(latest.used) : null,
-              limit: latest.limit_val ? parseFloat(latest.limit_val) : null,
-              remaining: latest.remaining ? parseFloat(latest.remaining) : null,
-              percentageUsed: latest.percentage_used ? parseFloat(latest.percentage_used) : null,
+              currentSpend: parseNum(latest.current_spend),
+              forecastedSpend: parseNum(latest.forecasted_spend),
+              budget: parseNum(latest.budget),
+              used: parseNum(latest.used),
+              limit: parseNum(latest.limit_val),
+              remaining: parseNum(latest.remaining),
+              percentageUsed: parseNum(latest.percentage_used),
               currency: latest.currency,
               thresholdStatus: latest.threshold_status,
               checkedAt: latest.checked_at,
@@ -119,6 +122,34 @@ router.get('/:service', async (req: Request, res: Response) => {
       [serviceKey]
     );
 
+    const parseNum = (val: any) =>
+      val !== null && val !== undefined && val !== '' ? parseFloat(val) : null;
+
+    const rawLatest = latestRes.rows[0];
+    const latestResult = rawLatest
+      ? {
+          ...rawLatest,
+          current_spend: parseNum(rawLatest.current_spend),
+          forecasted_spend: parseNum(rawLatest.forecasted_spend),
+          budget: parseNum(rawLatest.budget),
+          used: parseNum(rawLatest.used),
+          limit_val: parseNum(rawLatest.limit_val),
+          remaining: parseNum(rawLatest.remaining),
+          percentage_used: parseNum(rawLatest.percentage_used),
+        }
+      : null;
+
+    const rawThresh = thresholdRes.rows[0];
+    const thresholdConfig = rawThresh
+      ? {
+          ...rawThresh,
+          warningThreshold: parseNum(rawThresh.warning_threshold),
+          criticalThreshold: parseNum(rawThresh.critical_threshold),
+          alertCooldownMinutes: rawThresh.alert_cooldown_minutes,
+          isEnabled: rawThresh.is_enabled,
+        }
+      : null;
+
     res.json({
       service: {
         key: service.key,
@@ -130,8 +161,8 @@ router.get('/:service', async (req: Request, res: Response) => {
         isConfigured: provider ? provider.isConfigured() : false,
         requiredEnvVars: provider ? provider.getRequiredEnvVars() : [],
       },
-      latestResult: latestRes.rows[0] || null,
-      thresholdConfig: thresholdRes.rows[0] || null,
+      latestResult,
+      thresholdConfig,
       recentAlerts: alertsRes.rows,
     });
   } catch (err: any) {
